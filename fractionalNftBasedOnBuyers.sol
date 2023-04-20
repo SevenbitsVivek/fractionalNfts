@@ -37,7 +37,6 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
     Transaction[] private transactions;
     mapping(uint256 => mapping(address => bool)) private isOwner;
     mapping(uint => mapping(address => bool)) private isConfirmed;
-    mapping(uint256 => address) private fractionalBuyers;
     mapping(uint256 => uint256) private shareAmount;
     mapping(uint256 =>mapping(address => uint256)) public fractionalOwnersShares;
     //mapping the address of admin
@@ -263,11 +262,11 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
         return idToNFT[_tokenId].fractionalBuyer;
     }
 
-    function getNftShares(uint256 _tokenId) external view returns(uint256){
+    function getTotalNftShares(uint256 _tokenId) external view returns(uint256){
         return shareAmount[_tokenId];
     }
 
-    function getNftPrice(uint256 _tokenId) external view returns(uint256){
+    function getPerNftPrice(uint256 _tokenId) external view returns(uint256){
         return idToPrice[_tokenId];
     }
 
