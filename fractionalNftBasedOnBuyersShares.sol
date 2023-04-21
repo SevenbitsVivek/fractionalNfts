@@ -222,6 +222,7 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
       emit ExecuteTransaction(msg.sender, _txIndex);
       _transfer(address(this), msg.sender, _tokenId);
       fractionalOwnersShares[_tokenId][transaction.from] -= transaction.sharesToSell;
+      fractionalOwnersShares[_tokenId][msg.sender] += transaction.sharesToSell;
     }
 
     function revokeConfirmation(
