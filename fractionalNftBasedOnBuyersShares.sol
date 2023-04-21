@@ -162,7 +162,6 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
         require(_to != address(0), "Address cannot be 0");
         require(_startTime != 0 && _endTime != 0 && _endTime > _startTime, "Invalid parameters");
         require(fractionalOwnersShares[_tokenId][msg.sender] >= _sharesToSell, "Not enough shares to sell");
-        require(_startTime < _endTime, "Invalid timestamp");
         uint txIndex = transactions.length;
         transactions.push(
             Transaction({
