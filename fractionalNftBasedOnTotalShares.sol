@@ -35,10 +35,10 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
     );
 
     Transaction[] private transactions;
-    mapping(uint256 => mapping(address => bool)) public isOwner;
+    mapping(uint256 => mapping(address => bool)) private isOwner;
     mapping(uint => mapping(address => bool)) private isConfirmed;
     mapping(uint256 => uint256) private shareAmount;
-    mapping(uint256 => mapping(address => uint256)) public fractionalOwnersShares;
+    mapping(uint256 => mapping(address => uint256)) private fractionalOwnersShares;
     //mapping the address of admin
     mapping(uint256 => NFT) private idToNFT;
     // NFT ID => owner
