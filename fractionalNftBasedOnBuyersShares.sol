@@ -196,8 +196,8 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
       Transaction storage transaction = transactions[_txIndex];
       require(_to != address(0), "Address cannot be 0");
       require(block.timestamp > transaction.endTime, "Sale not over yet");
-      require(transaction.to == _to && transaction.price == msg.value && transaction.tokenId == _tokenId, "Invalid input parameters");
-      require(transaction.from == msg.sender, "Invalid fractional owner");
+      require(transaction.price == msg.value && transaction.tokenId == _tokenId, "Invalid input parameters");
+      require(transaction.to == msg.sender, "Invalid fractional owner");
       require(transaction.currentConfirmations >= transaction.confirmationsRequired, "Required confirmation should be same");
       uint256 totalShares = 0;
       for (uint i = 0; i < idToNFT[_tokenId].fractionalBuyer.length; i++) {
@@ -214,7 +214,7 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
         fractionalBuyer.transfer(priceForFractionalOwnersTotalShares);
       }
       emit ExecuteTransaction(msg.sender, _txIndex);
-      _transfer(address(this), _to, _tokenId);
+      _transfer(address(this), msg.sender, _tokenId);
       fractionalOwnersShares[_tokenId][msg.sender] -= transaction.sharesToSell;
       delete idToNFT[_tokenId].fractionalBuyer;
     }
