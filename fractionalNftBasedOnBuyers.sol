@@ -185,12 +185,12 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
     }
 
     function executeTransaction(
-        uint _txIndex, uint256 _tokenId, address _to, uint256 _price
+        uint _txIndex, uint256 _tokenId, uint256 _price
     ) external payable onlyFractionalOwners(_tokenId) txExists(_txIndex) notExecuted(_txIndex) whenNotPaused nonReentrant {
         Transaction storage transaction = transactions[_txIndex];
         require(block.timestamp > transaction.endTime, "Sale not over yet");
-        require(transaction.to == _to && transaction.price == msg.value && transaction.tokenId == _tokenId, "Invalid input parameters");
-        require(transaction.from == msg.sender, "Invalid fractional owner");
+        require(transaction.price == msg.value && transaction.tokenId == _tokenId, "Invalid input parameters");
+        require(transaction.to == msg.sender, "Invalid fractional owner");
         require(
             transaction.currentConfirmations >= transaction.confirmationsRequired,
             "Required confirmation should be same"
@@ -202,7 +202,7 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
             fractionalBuyersofNft.transfer(priceForFractionalOwnersBasedOnBuyers);
         }
         emit ExecuteTransaction(msg.sender, _txIndex);
-        _transfer(address(this), _to, _tokenId);
+        _transfer(address(this), msg.sender, _tokenId);
     }
 
     function revokeConfirmation(
