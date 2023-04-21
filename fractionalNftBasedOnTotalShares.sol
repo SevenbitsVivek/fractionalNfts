@@ -35,10 +35,10 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
     );
 
     Transaction[] private transactions;
-    mapping(uint256 => mapping(address => bool)) private isOwner;
+    mapping(uint256 => mapping(address => bool)) public isOwner;
     mapping(uint => mapping(address => bool)) private isConfirmed;
     mapping(uint256 => uint256) private shareAmount;
-    mapping(uint256 => mapping(address => uint256)) private fractionalOwnersShares;
+    mapping(uint256 => mapping(address => uint256)) public fractionalOwnersShares;
     //mapping the address of admin
     mapping(uint256 => NFT) private idToNFT;
     // NFT ID => owner
@@ -107,14 +107,20 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
         uint256 _pricePerShare,
         address _tokenAddress
     ) external whenNotPaused {
-        _transferNFT(msg.sender, address(this), _tokenId);
         require(_tokenAddress != address(0), "Address cannot be 0");
-        require(_sharesToSell > 0, "SharesToSell cannot be 0");
+        require(_sharesToSell > 0 && _sharesToSell <= 100, "Invalid SharesToSell");
         require(_pricePerShare > 0, "PricePerShare cannot be 0");
         idToOwner[_tokenId] = payable(msg.sender);
         tokenAddress = IERC20(_tokenAddress);
         shareAmount[_tokenId] = _sharesToSell;
         tokenAddress.transferFrom(msg.sender, address(this), _sharesToSell);
+        _transferNFT(msg.sender, address(this), _tokenId);
+        require(_exists(_tokenId), "Nft doest not exists");
+        if(_sharesToSell < 100) {
+            idToNFT[_tokenId].fractionalBuyer.push(msg.sender);
+            isOwner[_tokenId][msg.sender] = true;
+            fractionalOwnersShares[_tokenId][msg.sender] = 100 - _sharesToSell;
+        }
         idToPrice[_tokenId] = _pricePerShare;
     }
 
@@ -171,7 +177,7 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
                 confirmationsRequired: _numConfirmationsRequired,
                 currentConfirmations: 0,
                 startTime: block.timestamp + _startTime,
-                endTime: block.timestamp + _endTime
+                endTime: block.timestamp + _startTime + _endTime
             })
         );
         emit SubmitTransaction(msg.sender, txIndex, _to, _tokenId, _price);
@@ -192,7 +198,7 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
 
     function executeTransaction(
         uint _txIndex, uint256 _tokenId
-    ) external payable onlyFractionalOwners(_tokenId) txExists(_txIndex) notExecuted(_txIndex) whenNotPaused nonReentrant {
+    ) external payable  txExists(_txIndex) notExecuted(_txIndex) whenNotPaused nonReentrant {
         Transaction storage transaction = transactions[_txIndex];
         require(block.timestamp > transaction.endTime, "Sale not over yet");
         require(transaction.price == msg.value && transaction.tokenId == _tokenId, "Invalid input parameters");
@@ -212,10 +218,10 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
             uint256 priceForFractionalOwnersTotalShares = priceForFractionalOwner / totalShares;
             fractionalBuyer.transfer(priceForFractionalOwnersTotalShares);
         }
+        isOwner[_tokenId][msg.sender] = true;
         emit ExecuteTransaction(msg.sender, _txIndex);
         _transfer(address(this), msg.sender, _tokenId);
-        fractionalOwnersShares[_tokenId][msg.sender] -= transaction.sharesToSell;
-        delete idToNFT[_tokenId].fractionalBuyer;
+        fractionalOwnersShares[_tokenId][transaction.from] -= transaction.sharesToSell;
     }
 
     function revokeConfirmation(
