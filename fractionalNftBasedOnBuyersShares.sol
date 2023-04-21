@@ -35,10 +35,10 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
     );
 
     Transaction[] private transactions;
-    mapping(uint256 => mapping(address => bool)) private isOwner;
+    mapping(uint256 => mapping(address => bool)) public isOwner;
     mapping(uint => mapping(address => bool)) private isConfirmed;
     mapping(uint256 => uint256) private shareAmount;
-    mapping(uint256 => mapping(address => uint256)) private fractionalOwnersShares;
+    mapping(uint256 => mapping(address => uint256)) public fractionalOwnersShares;
     //mapping the address of admin
     mapping(uint256 => NFT) private idToNFT;
     // NFT ID => owner
@@ -90,17 +90,6 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
         _owner = msg.sender;
     }
 
-    function _transferNFT(
-        address _sender,
-        address _receiver,
-        uint256 _tokenId
-    ) internal {
-        require(_sender != address(0), "Address cannot be 0");
-        require(_receiver != address(0), "Address cannot be 0");
-        _mint(_sender, _tokenId);
-        transferFrom(_sender, _receiver, _tokenId);
-    }
-
     function lockNFT(
         uint256 _tokenId,
         uint256 _sharesToSell,
@@ -108,19 +97,21 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
         address _tokenAddress
     ) external whenNotPaused {
         require(_tokenAddress != address(0), "Address cannot be 0");
-        require(_sharesToSell > 0 && _sharesToSell <= 100, "Invalid SharesToSell");
+        require(_sharesToSell > 0 && _sharesToSell < 100, "Invalid SharesToSell");
         require(_pricePerShare > 0, "PricePerShare cannot be 0");
         idToOwner[_tokenId] = payable(msg.sender);
         tokenAddress = IERC20(_tokenAddress);
         shareAmount[_tokenId] = _sharesToSell;
+        require(
+            tokenAddress.allowance(msg.sender, address(this)) >= _sharesToSell,
+            "Check the token allowance"
+        );
         tokenAddress.transferFrom(msg.sender, address(this), _sharesToSell);
-        _transferNFT(msg.sender, address(this), _tokenId);
-        require(_exists(_tokenId), "Nft doest not exists");
-        if(_sharesToSell < 100) {
-            idToNFT[_tokenId].fractionalBuyer.push(msg.sender);
-            isOwner[_tokenId][msg.sender] = true;
-            fractionalOwnersShares[_tokenId][msg.sender] = 100 - _sharesToSell;
-        }
+        require(!_exists(_tokenId), "Nft already exists");
+        idToNFT[_tokenId].fractionalBuyer.push(msg.sender);
+        isOwner[_tokenId][msg.sender] = true;
+        fractionalOwnersShares[_tokenId][msg.sender] = 100 - _sharesToSell;
+        _mint(msg.sender, _tokenId);
         idToPrice[_tokenId] = _pricePerShare;
     }
 
@@ -187,7 +178,7 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
         Transaction storage transaction = transactions[_txIndex];
         require(block.timestamp > transaction.startTime, "Sale is not started yet");
         require(transaction.from != msg.sender, "You cannot confirm the transaction");
-        require(block.timestamp <= transaction.startTime + transaction.endTime, "Sale is over");
+        require(block.timestamp <= transaction.endTime, "Sale is over");
         transaction.currentConfirmations += 1;
         isConfirmed[_txIndex][msg.sender] = true;
         emit ConfirmTransaction(msg.sender, _txIndex);
@@ -196,31 +187,54 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
     function executeTransaction(
         uint _txIndex, uint256 _tokenId
     ) external payable  txExists(_txIndex) notExecuted(_txIndex) whenNotPaused nonReentrant {
-      Transaction storage transaction = transactions[_txIndex];
-      require(block.timestamp > transaction.endTime, "Sale not over yet");
-      require(transaction.price == msg.value && transaction.tokenId == _tokenId, "Invalid input parameters");
-      require(transaction.to == msg.sender, "Invalid fractional owner");
-      require(transaction.currentConfirmations >= transaction.confirmationsRequired, "Required confirmation should be same");
-      uint256 totalShares = 0;
-      for (uint i = 0; i < idToNFT[_tokenId].fractionalBuyer.length; i++) {
-        totalShares += fractionalOwnersShares[_tokenId][idToNFT[_tokenId].fractionalBuyer[i]];
-      }
-      if (totalShares == 0) {
-        revert("Cannot divide by zero");
-      }
-      uint256 pricePerShare = msg.value / totalShares;
-      for (uint i = 0; i < idToNFT[_tokenId].fractionalBuyer.length; i++) {
-        address payable fractionalBuyer = payable(idToNFT[_tokenId].fractionalBuyer[i]);
-        uint256 priceForFractionalOwnersTotalShares = pricePerShare * fractionalOwnersShares[_tokenId][fractionalBuyer];
-        uint256 smartContractFees = (priceForFractionalOwnersTotalShares * 2 / 100);
-        fractionalBuyer.transfer(priceForFractionalOwnersTotalShares - smartContractFees);
-      }
-      isOwner[_tokenId][msg.sender] = true;
-      emit ExecuteTransaction(msg.sender, _txIndex);
-      _transfer(address(this), msg.sender, _tokenId);
-      fractionalOwnersShares[_tokenId][transaction.from] -= transaction.sharesToSell;
-      fractionalOwnersShares[_tokenId][msg.sender] += transaction.sharesToSell;
-      idToNFT[_tokenId].fractionalBuyer.push(msg.sender);
+        Transaction storage transaction = transactions[_txIndex];
+        require(block.timestamp > transaction.endTime, "Sale not over yet");
+        require(transaction.price == msg.value && transaction.tokenId == _tokenId, "Invalid input parameters");
+        require(transaction.to == msg.sender, "Invalid fractional owner");
+        require(transaction.currentConfirmations >= transaction.confirmationsRequired, "Required confirmation should be same");
+        require(
+            tokenAddress.allowance(transaction.from, address(this)) >= transaction.sharesToSell,
+            "Check the token allowance"
+        );
+        uint256 totalShares = 0;
+        for (uint i = 0; i < idToNFT[_tokenId].fractionalBuyer.length; i++) {
+            totalShares += fractionalOwnersShares[_tokenId][idToNFT[_tokenId].fractionalBuyer[i]];
+        }
+        if (totalShares == 0) {
+            revert("Cannot divide by zero");
+        }
+        uint256 pricePerShare = msg.value / totalShares;
+        for (uint i = 0; i < idToNFT[_tokenId].fractionalBuyer.length; i++) {
+            address payable fractionalBuyer = payable(idToNFT[_tokenId].fractionalBuyer[i]);
+            uint256 priceForFractionalOwnersTotalShares = pricePerShare * fractionalOwnersShares[_tokenId][fractionalBuyer];
+            uint256 smartContractFees = (priceForFractionalOwnersTotalShares * 2 / 100);
+            fractionalBuyer.transfer(priceForFractionalOwnersTotalShares - smartContractFees);
+        }
+        fractionalOwnersShares[_tokenId][transaction.from] -= transaction.sharesToSell;
+        fractionalOwnersShares[_tokenId][msg.sender] += transaction.sharesToSell;
+        if(!isOwner[_tokenId][msg.sender]){
+            idToNFT[_tokenId].fractionalBuyer.push(msg.sender);
+            isOwner[_tokenId][msg.sender] = true;
+        }
+        tokenAddress.transferFrom(transaction.from, msg.sender, transaction.sharesToSell);
+        // Delete staker's address from stakersList
+        for (uint i = 0; i < idToNFT[_tokenId].fractionalBuyer.length; i++) {
+            if (fractionalOwnersShares[_tokenId][idToNFT[_tokenId].fractionalBuyer[i]] == 0) {
+                isOwner[_tokenId][idToNFT[_tokenId].fractionalBuyer[i]] = false;
+                delete idToNFT[_tokenId].fractionalBuyer[i];
+                if (i < idToNFT[_tokenId].fractionalBuyer.length - 1) {
+                    // Shift the elements after the deleted element
+                    for (uint j = i; j < idToNFT[_tokenId].fractionalBuyer.length - 1; j++) {
+                        idToNFT[_tokenId].fractionalBuyer[j] = idToNFT[_tokenId].fractionalBuyer[j + 1];
+                    }
+                }
+                // Remove the last element
+                idToNFT[_tokenId].fractionalBuyer.pop();
+                break;
+            }
+        }
+        transaction.executed = true;
+        emit ExecuteTransaction(msg.sender, _txIndex);
     }
 
     function revokeConfirmation(
