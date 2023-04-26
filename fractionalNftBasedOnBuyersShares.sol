@@ -87,7 +87,6 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
 
     constructor(string memory name, string memory symbol) ERC721(name, symbol){
         require(bytes(name).length > 0 && bytes(symbol).length > 0, "Invalid parameters");
-        _owner = msg.sender;
     }
 
     function lockNFT(
