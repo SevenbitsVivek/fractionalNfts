@@ -219,7 +219,7 @@ contract FractionalNft is Pausable, ERC721, Ownable, ReentrancyGuard{
             isOwner[_tokenId][msg.sender] = true;
         }
         tokenAddress.transferFrom(transaction.from, msg.sender, transaction.sharesToSell);
-        // Delete staker's address from stakersList
+        // Delete fractionalBuyers address from fractionalBuyer[]
         for (uint i = 0; i < idToNFT[_tokenId].fractionalBuyer.length; i++) {
             if (fractionalOwnersShares[_tokenId][idToNFT[_tokenId].fractionalBuyer[i]] == 0) {
                 isOwner[_tokenId][idToNFT[_tokenId].fractionalBuyer[i]] = false;
